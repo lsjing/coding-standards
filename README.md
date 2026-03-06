@@ -346,13 +346,11 @@ CREATE TABLE example_table (
 
 ```sql
 -- Primary key: pk_{table}
--- Foreign key: fk_{table}_{referenced_table}
 -- Unique key: uk_{table}_{column}
 -- Index: idx_{table}_{column}
 
 -- Examples
 CONSTRAINT pk_user PRIMARY KEY (id),
-CONSTRAINT fk_user_role FOREIGN KEY (role_id) REFERENCES role(id),
 CONSTRAINT uk_user_email UNIQUE (email),
 INDEX idx_user_created_at (created_at)
 ```
@@ -387,52 +385,31 @@ CREATE TABLE user (
 ```sql
 -- ✅ GOOD: All columns have comments
 CREATE TABLE user (
-  id BIGINT PRIMARY KEY COMMENT '用户ID',
-  user_name VARCHAR(50) NOT NULL COMMENT '用户名',
-  email VARCHAR(100) NOT NULL COMMENT '邮箱地址',
-  is_active BOOLEAN DEFAULT TRUE COMMENT '是否激活',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
+  user_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '用户名',
+  email VARCHAR(100) NOT NULL DEFAULT '' COMMENT '邮箱地址',
+  is_active TINYINT NOT NULL DEFAULT 1 COMMENT '是否激活 0=否 1=是',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
 );
 
 -- ❌ BAD: Missing comments
 CREATE TABLE user (
   id BIGINT PRIMARY KEY,
-  user_name VARCHAR(50) NOT NULL,
+  user_name VARCHAR(50),
   email VARCHAR(100)
 );
 ```
 
-**3. Default Values Are Mandatory**
-- ✅ Every column that can have a default value MUST have one
-- Include: BOOLEAN, DATETIME, TIMESTAMP, numeric fields with common defaults
-- Use sensible defaults: `0`, `''`, `TRUE`, `FALSE`, `CURRENT_TIMESTAMP`
+**3. DEFAULT + NOT NULL 综合规则 (CRITICAL)**
 
-```sql
--- ✅ GOOD: Proper defaults
-CREATE TABLE user (
-  id BIGINT PRIMARY KEY COMMENT '用户ID',
-  is_active BOOLEAN DEFAULT TRUE COMMENT '是否激活',
-  status TINYINT DEFAULT 1 COMMENT '状态 0=禁用 1=正常',
-  login_count INT DEFAULT 0 COMMENT '登录次数',
-  last_login_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '最后登录时间',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
-);
+⚠️ **这是最重要的规则，适用于所有字段**：
 
--- ❌ BAD: Missing defaults where applicable
-CREATE TABLE user (
-  id BIGINT PRIMARY KEY,
-  is_active BOOLEAN COMMENT '是否激活',
-  status TINYINT COMMENT '状态',
-  last_login_at DATETIME COMMENT '最后登录时间'
-);
-```
-
-**3.1 DEFAULT + NOT NULL Rule (CRITICAL)**
-- ⚠️ **强制规则**: 所有可以设置 DEFAULT 值的字段，必须同时设置为 NOT NULL
-- 这个规则是双向的：
+- **双向绑定**：DEFAULT 和 NOT NULL 必须同时存在
   - 有 DEFAULT 的字段 → 必须是 NOT NULL
   - NOT NULL 的字段 → 必须有 DEFAULT
-- 例外：主键字段(AUTO_INCREMENT)、真正需要 NULL 的可选字段(如 deleted_at)
+- **例外情况**：
+  - 主键字段 (AUTO_INCREMENT) → 无需 DEFAULT
+  - 真正需要 NULL 的可选字段 (如 deleted_at) → 允许 `DEFAULT NULL`
 
 ```sql
 -- ✅ GOOD: DEFAULT + NOT NULL 配合使用
@@ -440,79 +417,39 @@ CREATE TABLE user (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
   user_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '用户名',
   email VARCHAR(100) NOT NULL DEFAULT '' COMMENT '邮箱地址',
+  phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '手机号',
   is_active TINYINT NOT NULL DEFAULT 1 COMMENT '是否激活 0=否 1=是',
   status TINYINT NOT NULL DEFAULT 0 COMMENT '状态',
   login_count INT NOT NULL DEFAULT 0 COMMENT '登录次数',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  deleted_at DATETIME DEFAULT NULL COMMENT '删除时间(允许NULL表示未删除)'
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted_at DATETIME DEFAULT NULL COMMENT '删除时间(NULL表示未删除)'
 );
 
 -- ❌ BAD: 有 DEFAULT 但没有 NOT NULL
 CREATE TABLE user (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
-  is_active TINYINT DEFAULT 1 COMMENT '是否激活',  -- 缺少 NOT NULL
-  status TINYINT DEFAULT 0 COMMENT '状态',         -- 缺少 NOT NULL
-  login_count INT DEFAULT 0 COMMENT '登录次数'     -- 缺少 NOT NULL
-);
-```
-
-**4. NOT NULL Is Mandatory**
-- ✅ Every column that can be NOT NULL must be NOT NULL
-- Only allow NULL for truly optional fields
-- Most fields should be NOT NULL by default
-
-```sql
--- ✅ GOOD: Proper NOT NULL constraints
-CREATE TABLE user (
-  id BIGINT PRIMARY KEY COMMENT '用户ID',
-  user_name VARCHAR(50) NOT NULL COMMENT '用户名',
-  email VARCHAR(100) NOT NULL COMMENT '邮箱地址',
-  phone VARCHAR(20) COMMENT '手机号(可选)',
-  is_active BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否激活',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+  is_active TINYINT DEFAULT 1 COMMENT '是否激活',  -- ❌ 缺少 NOT NULL
+  status TINYINT DEFAULT 0 COMMENT '状态'          -- ❌ 缺少 NOT NULL
 );
 
--- ❌ BAD: Missing NOT NULL where applicable
-CREATE TABLE user (
-  id BIGINT PRIMARY KEY,
-  user_name VARCHAR(50) COMMENT '用户名',
-  email VARCHAR(100) COMMENT '邮箱地址',
-  is_active BOOLEAN COMMENT '是否激活'
-);
-```
-
-**5. NOT NULL Requires DEFAULT**
-- ⚠️ **CRITICAL**: If a field is NOT NULL, it MUST have a DEFAULT value
-- This prevents insert errors when columns are not explicitly specified
-- The only exception: Primary key fields with AUTO_INCREMENT
-
-```sql
--- ✅ GOOD: NOT NULL + DEFAULT
+-- ❌ BAD: 有 NOT NULL 但没有 DEFAULT
 CREATE TABLE user (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
-  user_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '用户名',
-  email VARCHAR(100) NOT NULL DEFAULT '' COMMENT '邮箱地址',
-  phone VARCHAR(20) DEFAULT '' COMMENT '手机号',
-  is_active BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否激活',
-  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+  user_name VARCHAR(50) NOT NULL COMMENT '用户名',  -- ❌ 缺少 DEFAULT
+  email VARCHAR(100) NOT NULL COMMENT '邮箱地址'    -- ❌ 缺少 DEFAULT
 );
 
--- ❌ BAD: NOT NULL without DEFAULT (non-PK fields)
-CREATE TABLE user (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
-  user_name VARCHAR(50) NOT NULL COMMENT '用户名',  -- 缺少 DEFAULT
-  email VARCHAR(100) NOT NULL COMMENT '邮箱地址',  -- 缺少 DEFAULT
-  is_active BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否激活'  -- 正确
-);
+-- ✅ CORRECT: 主键无需 DEFAULT
+id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID'  -- ✅ OK
 
--- ✅ CORRECT: PK with AUTO_INCREMENT doesn't need DEFAULT
-id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID'  -- OK, 无需 DEFAULT
+-- ✅ CORRECT: 允许 NULL 的可选字段
+deleted_at DATETIME DEFAULT NULL COMMENT '删除时间(NULL表示未删除)'  -- ✅ OK
 ```
 
-**6. Field Type Standards**
+**4. Field Type Standards**
 
-**6.1 Money/Amount Fields**
+**4.1 Money/Amount Fields**
 - ❌ NEVER use DECIMAL, FLOAT, or DOUBLE for money
 - ✅ ALWAYS use BIGINT or INT to store amount in **cents/fen** (分)
 - Application layer handles conversion to/from yuan (元)
@@ -521,14 +458,14 @@ id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID'  -- OK, 无需 DEFAULT
 -- ✅ GOOD: Store in cents/fen
 amount BIGINT NOT NULL DEFAULT 0 COMMENT '订单金额(分)',
 price INT NOT NULL DEFAULT 0 COMMENT '商品价格(分)',
-discount INT DEFAULT 0 COMMENT '折扣金额(分)'
+discount INT NOT NULL DEFAULT 0 COMMENT '折扣金额(分)'
 
 -- ❌ BAD: Floating point for money
 amount DECIMAL(10,2) COMMENT '订单金额',
 price FLOAT COMMENT '商品价格'
 ```
 
-**6.2 No ENUM Types**
+**4.2 No ENUM Types**
 - ❌ NEVER use ENUM type
 - ✅ Use TINYINT + COMMENT to define enumerated values
 - Rationale: ENUM is inflexible, hard to modify, and not portable
@@ -544,7 +481,7 @@ status ENUM('disabled', 'active', 'frozen'),
 user_type ENUM('normal', 'vip', 'svip')
 ```
 
-**6.3 Gender Field**
+**4.3 Gender Field**
 - ✅ Use TINYINT for gender
 - Standard mapping: `0 = 女性`, `1 = 男性`
 - Allow NULL for unspecified/unknown
@@ -559,7 +496,7 @@ gender VARCHAR(10),
 gender BOOLEAN
 ```
 
-**6.4 Time/DateTime Fields**
+**4.4 Time/DateTime Fields**
 - ✅ Database: Use **DATETIME** type
 - ✅ API传输: Use **ISO8601** format (e.g., `2024-01-15T10:30:00Z`)
 - ❌ NEVER use TIMESTAMP type
@@ -590,7 +527,7 @@ created_at VARCHAR(50)
 }
 ```
 
-**6.5 Status Fields**
+**4.5 Status Fields**
 - ✅ Priority: Use TINYINT for status fields
 - ✅ Always add COMMENT explaining each value
 - Common pattern: 0 = inactive/disabled, 1 = active/enabled
@@ -607,7 +544,7 @@ status INT DEFAULT 0 COMMENT '状态',
 status ENUM('disabled', 'enabled')
 ```
 
-**6.6 Timestamp Fields (Required)**
+**4.6 Timestamp Fields (Required)**
 - ✅ **EVERY table must have `created_at` and `updated_at` fields**
 - Both must be NOT NULL with DEFAULT CURRENT_TIMESTAMP
 - Use ON UPDATE CURRENT_TIMESTAMP for `updated_at`
@@ -632,7 +569,7 @@ CREATE TABLE tbl_order (
   order_no VARCHAR(50) NOT NULL DEFAULT '' COMMENT '订单号',
   user_id BIGINT NOT NULL DEFAULT 0 COMMENT '用户ID',
   total_amount BIGINT NOT NULL DEFAULT 0 COMMENT '订单总金额(分)',
-  discount_amount BIGINT DEFAULT 0 COMMENT '折扣金额(分)',
+  discount_amount BIGINT NOT NULL DEFAULT 0 COMMENT '折扣金额(分)',
   actual_amount BIGINT NOT NULL DEFAULT 0 COMMENT '实付金额(分)',
   status TINYINT NOT NULL DEFAULT 0 COMMENT '订单状态 0=待支付 1=已支付 2=已发货 3=已完成 4=已取消',
   payment_status TINYINT NOT NULL DEFAULT 0 COMMENT '支付状态 0=未支付 1=已支付 2=已退款',
@@ -649,27 +586,26 @@ CREATE TABLE tbl_order (
 
 **Key Points**:
 - `id`: PRIMARY KEY + AUTO_INCREMENT → ✅ 无需 DEFAULT
-- `total_amount`, `actual_amount`: BIGINT 存储分 → ✅ 规则6.1
-- `status`, `payment_status`: TINYINT + 详细注释 → ✅ 规则6.2, 6.5
-- `gender`: TINYINT with NULL option → ✅ 规则6.3
-- `created_at`, `updated_at`: DATETIME → ✅ 规则6.4, 6.6
-- All NOT NULL fields have DEFAULT → ✅ 规则5
+- `total_amount`, `actual_amount`: BIGINT 存储分 → ✅ 规则4.1
+- `status`, `payment_status`: TINYINT + 详细注释 → ✅ 规则4.2, 4.5
+- `gender`: TINYINT with NULL option → ✅ 规则4.3
+- `created_at`, `updated_at`: DATETIME → ✅ 规则4.4, 4.6
+- All NOT NULL fields have DEFAULT → ✅ 规则3
 
 ### Migration Checklist
 
 Before committing a database migration, verify:
 - [ ] No foreign key constraints
 - [ ] Every column has a COMMENT
-- [ ] All possible columns have DEFAULT values
-- [ ] All non-nullable columns are set to NOT NULL
-- [ ] NOT NULL columns must have DEFAULT values (except PK with AUTO_INCREMENT)
-- [ ] DEFAULT columns must be NOT NULL (双向规则 → 规则3.1)
-- [ ] Money fields use BIGINT/INT (cents/fen) → ✅ 规则6.1
-- [ ] No ENUM types, use TINYINT + COMMENT → ✅ 规则6.2
-- [ ] Gender uses TINYINT (0=女, 1=男) → ✅ 规则6.3
-- [ ] Time fields use DATETIME → ✅ 规则6.4
-- [ ] Status fields use TINYINT + COMMENT → ✅ 规则6.5
-- [ ] Table has created_at and updated_at → ✅ 规则6.6
+- [ ] DEFAULT + NOT NULL 综合规则 → 规则3
+  - 有 DEFAULT 的字段必须是 NOT NULL
+  - NOT NULL 的字段必须有 DEFAULT (主键除外)
+- [ ] Money fields use BIGINT/INT (cents/fen) → ✅ 规则4.1
+- [ ] No ENUM types, use TINYINT + COMMENT → ✅ 规则4.2
+- [ ] Gender uses TINYINT (0=女, 1=男) → ✅ 规则4.3
+- [ ] Time fields use DATETIME → ✅ 规则4.4
+- [ ] Status fields use TINYINT + COMMENT → ✅ 规则4.5
+- [ ] Table has created_at and updated_at → ✅ 规则4.6
 - [ ] Table name follows naming conventions (singular, tbl_ prefix for conflicts)
 - [ ] Column names use lowercase with underscores
 - [ ] Indexes follow naming conventions
@@ -688,7 +624,6 @@ DELETE /api/users/:id            # Delete user
 
 # Path naming: lowercase with hyphens
 GET    /api/security-groups      # ✅ GOOD
-GET    /api/securityGroups       # ❌ BAD
 GET    /api/securityGroups       # ❌ BAD
 
 # Query parameters for filtering
