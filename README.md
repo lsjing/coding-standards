@@ -427,6 +427,35 @@ CREATE TABLE user (
 );
 ```
 
+**3.1 DEFAULT + NOT NULL Rule (CRITICAL)**
+- ⚠️ **强制规则**: 所有可以设置 DEFAULT 值的字段，必须同时设置为 NOT NULL
+- 这个规则是双向的：
+  - 有 DEFAULT 的字段 → 必须是 NOT NULL
+  - NOT NULL 的字段 → 必须有 DEFAULT
+- 例外：主键字段(AUTO_INCREMENT)、真正需要 NULL 的可选字段(如 deleted_at)
+
+```sql
+-- ✅ GOOD: DEFAULT + NOT NULL 配合使用
+CREATE TABLE user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
+  user_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '用户名',
+  email VARCHAR(100) NOT NULL DEFAULT '' COMMENT '邮箱地址',
+  is_active TINYINT NOT NULL DEFAULT 1 COMMENT '是否激活 0=否 1=是',
+  status TINYINT NOT NULL DEFAULT 0 COMMENT '状态',
+  login_count INT NOT NULL DEFAULT 0 COMMENT '登录次数',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  deleted_at DATETIME DEFAULT NULL COMMENT '删除时间(允许NULL表示未删除)'
+);
+
+-- ❌ BAD: 有 DEFAULT 但没有 NOT NULL
+CREATE TABLE user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
+  is_active TINYINT DEFAULT 1 COMMENT '是否激活',  -- 缺少 NOT NULL
+  status TINYINT DEFAULT 0 COMMENT '状态',         -- 缺少 NOT NULL
+  login_count INT DEFAULT 0 COMMENT '登录次数'     -- 缺少 NOT NULL
+);
+```
+
 **4. NOT NULL Is Mandatory**
 - ✅ Every column that can be NOT NULL must be NOT NULL
 - Only allow NULL for truly optional fields
@@ -634,6 +663,7 @@ Before committing a database migration, verify:
 - [ ] All possible columns have DEFAULT values
 - [ ] All non-nullable columns are set to NOT NULL
 - [ ] NOT NULL columns must have DEFAULT values (except PK with AUTO_INCREMENT)
+- [ ] DEFAULT columns must be NOT NULL (双向规则 → 规则3.1)
 - [ ] Money fields use BIGINT/INT (cents/fen) → ✅ 规则6.1
 - [ ] No ENUM types, use TINYINT + COMMENT → ✅ 规则6.2
 - [ ] Gender uses TINYINT (0=女, 1=男) → ✅ 规则6.3
